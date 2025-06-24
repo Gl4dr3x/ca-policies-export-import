@@ -1,9 +1,71 @@
-🧱 Prerequisites
-PowerShell 7 (recommended: Download from GitHub)
-Microsoft Graph PowerShell SDK (Microsoft.Graph module)
+# Exporting and Importing Conditional Access Policies via PowerShell 7 and Microsoft Graph
+This guide explains how to export and import Conditional Access Policies using **PowerShell 7**, an **X.509 Client Certificate**, and the **Microsoft Graph PowerShell SDK**.
 
-An app registered in Entra ID (Azure AD) with:
-Policy.Read.All permission (for Export).
-Policy.ReadWrite.ConditionalAccess permission (for Import).
-Certificate configured for app authentication (no secrets).
-The certificate installed in the Current User certificate store (CurrentUser\My).
+---
+
+## ✅ Prerequisites
+
+- **PowerShell 7** installed ➔ [PowerShell Downloads](https://github.com/PowerShell/PowerShell/releases/)
+- An **App Registration** in Entra ID (Azure AD) configured with:
+  - An **X.509 Client Certificate** (no Client Secret!)
+  - Application Permissions:
+    - `Policy.Read.All` (Export)
+    - `Policy.ReadWrite.ConditionalAccess` (Import)
+
+---
+
+## 🔐 Authentication via Client Certificate
+
+This method uses an X.509 Client Certificate configured in the App Registration.  
+The private certificate must be installed in the **Current User** certificate store (`Cert:\CurrentUser\My`) of the machine running the script.
+
+## 🔐 Creating an X.509 Client Certificate
+
+If you don’t already have a certificate, you can create a **self-signed certificate** using PowerShell:
+
+```powershell
+# Create a new self-signed certificate in the Current User Store
+$cert = New-SelfSignedCertificate `
+    -Subject "CN=MyGraphApp" `
+    -CertStoreLocation "Cert:\CurrentUser\My" `
+    -KeyExportPolicy Exportable `
+    -KeySpec Signature `
+    -KeyLength 2048 `
+    -HashAlgorithm "SHA256"
+
+# Export the public key (.cer) for upload to the App Registration
+Export-Certificate -Cert $cert -FilePath "C:\MyGraphApp.cer"
+
+# Export the private key (.pfx) for backups or deployments (optional)
+Export-PfxCertificate -Cert $cert -FilePath "C:\MyGraphApp.pfx" -Password (ConvertTo-SecureString "YourStrongPassword" -AsPlainText -Force)
+
+# ✅ Done! Use the Thumbprint for connecting to Microsoft Graph.
+$CertificateThumbprint
+
+# ✅ Save the Thumbprint for later use
+$CertificateThumbprint = $cert.Thumbprint
+
+---
+
+## ⚡️ Exporting Conditional Access Policies
+
+```powershell
+# Export-CA-Policies.ps1
+
+param (
+    [string]$ClientId,
+    [string]$TenantId,
+    [string]$CertificateThumbprint
+)
+
+Install-Module Microsoft.Graph -AllowClobber -Scope CurrentUser
+
+Import-Module Microsoft.Graph
+
+$cert = Get-ChildItem -Path "Cert:\CurrentUser\My\$CertificateThumbprint"
+
+Connect-MgGraph -ClientId $ClientId -TenantId $TenantId -Certificate $cert
+
+$policies = Get-MgIdentityConditionalAccessPolicy
+$timestamp = (Get-Date).ToString("yyyy-MM-dd_HH-mm")
+$policies | ConvertTo-Json -Depth 10 | Out-File "CA-Policies_$timestamp.json" -Encoding UTF8
