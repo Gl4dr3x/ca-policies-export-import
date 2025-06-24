@@ -1,0 +1,9 @@
+🧱 Prerequisites
+PowerShell 7 (recommended: Download from GitHub)
+Microsoft Graph PowerShell SDK (Microsoft.Graph module)
+
+An app registered in Entra ID (Azure AD) with:
+Policy.Read.All permission (for Export).
+Policy.ReadWrite.ConditionalAccess permission (for Import).
+Certificate configured for app authentication (no secrets).
+The certificate installed in the Current User certificate store (CurrentUser\My).
